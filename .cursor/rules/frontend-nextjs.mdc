@@ -1,6 +1,6 @@
 ---
-description: Next.js frontend conventions for SYRA
-globs: syra/frontend/**/*.{ts,tsx}
+description: Next.js frontend conventions for TANTR
+globs: tantr/frontend/**/*.{ts,tsx}
 alwaysApply: false
 ---
 
@@ -15,7 +15,7 @@ alwaysApply: false
 
 ## Auth
 
-- JWT in `localStorage` key `syra_token`
+- JWT in `localStorage` key `tantr_token`
 - Guard pages: redirect to `/login` if no token
 - Use `getMe()` for user/admin checks
 

@@ -1,3 +1,0 @@
-"""
-SYRA Celery tasks.
-"""

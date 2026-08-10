@@ -23,7 +23,7 @@ node_modules/
 out/
 
 # Legacy filesystem repo storage (runtime data; custom VCS uses DB)
-syra/backend/repos/
+tantr/backend/repos/
 backend/repos/
 
 # OS / IDE local

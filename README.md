@@ -1,4 +1,4 @@
-# AI Commit Professor
+# TANTR
 
 An AI-powered GitHub-like platform that automatically evaluates student code commits and provides professor-style grading and feedback.
 
@@ -8,7 +8,7 @@ The platform allows students to push code, track commit history, and receive aut
 
 ## 🚀 Overview
 
-AI Commit Professor is a learning platform designed to help students improve their coding skills through continuous commit-based evaluation.
+TANTR is a learning platform designed to help students improve their coding skills through continuous commit-based evaluation.
 
 Instead of manually reviewing assignments, the system automatically analyzes code and generates feedback using an AI evaluation engine.
 

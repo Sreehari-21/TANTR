@@ -1,6 +1,6 @@
 ---
-description: FastAPI backend conventions for SYRA
-globs: syra/backend/**/*.py
+description: FastAPI backend conventions for TANTR
+globs: tantr/backend/**/*.py
 alwaysApply: false
 ---
 
