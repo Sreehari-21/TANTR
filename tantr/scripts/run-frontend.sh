@@ -7,4 +7,5 @@ cd frontend
 PORT="${PORT:-3001}"
 export PORT
 echo "Starting frontend on http://localhost:${PORT}"
-npm run dev
+# Webpack is more stable here after the SYRA→TANTR rename (Turbopack cache panics)
+npm run dev -- --webpack -p "${PORT}"

@@ -68,12 +68,23 @@ export type Enquiry = {
   created_at: string;
 };
 
+export type RubricWeights = {
+  code_quality: number;
+  efficiency: number;
+  documentation: number;
+  testing: number;
+  commit_consistency: number;
+};
+
 export type Repo = {
   id: number;
   name: string;
   description: string | null;
   owner_id: number;
   head_sha?: string | null;
+  assignment_title?: string | null;
+  assignment_brief?: string | null;
+  rubric_weights?: RubricWeights | Record<string, number> | null;
   created_at: string;
 };
 
@@ -169,8 +180,26 @@ export async function getRepo(id: number): Promise<Repo> {
   return api(`/api/repos/${id}`);
 }
 
-export async function createRepo(data: { name: string; description?: string }): Promise<Repo> {
+export async function createRepo(data: {
+  name: string;
+  description?: string;
+  assignment_title?: string;
+  assignment_brief?: string;
+  rubric_weights?: RubricWeights;
+}): Promise<Repo> {
   return api('/api/repos', { method: 'POST', body: JSON.stringify(data) });
+}
+
+export async function updateRepo(
+  id: number,
+  data: {
+    description?: string | null;
+    assignment_title?: string | null;
+    assignment_brief?: string | null;
+    rubric_weights?: RubricWeights | null;
+  }
+): Promise<Repo> {
+  return api(`/api/repos/${id}`, { method: 'PATCH', body: JSON.stringify(data) });
 }
 
 export async function getCommits(repoId: number): Promise<Commit[]> {

@@ -26,6 +26,7 @@ def evaluate_commit(
     *,
     commit_message: str | None = None,
     difficulty: dict[str, Any] | None = None,
+    assignment: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
     Evaluate a commit as a computer science professor would.
@@ -51,6 +52,7 @@ def evaluate_commit(
                 diff, files, analysis_results,
                 commit_message=commit_message,
                 difficulty=difficulty,
+                assignment=assignment,
             )
             result["source"] = "openai"
             return result
@@ -60,6 +62,7 @@ def evaluate_commit(
         diff, files, analysis_results,
         commit_message=commit_message,
         difficulty=difficulty,
+        assignment=assignment,
     )
     result["source"] = "placeholder"
     return result
@@ -80,6 +83,7 @@ def _openai_evaluate(
     *,
     commit_message: str | None = None,
     difficulty: dict[str, Any] | None = None,
+    assignment: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     from openai import OpenAI
 
@@ -101,6 +105,7 @@ def _openai_evaluate(
             "warnings_sample": (analysis_results.get("warnings") or [])[:8],
             "commit_message": commit_message,
             "difficulty": (difficulty or {}).get("level"),
+            "assignment_title": (assignment or {}).get("title"),
         },
         default=str,
     )
@@ -115,9 +120,17 @@ def _openai_evaluate(
         "- suggestions (array of 3-6 short actionable strings)\n"
         "Consider correctness, algorithm efficiency for the problem difficulty, "
         "readability, documentation, tests, and commit message quality. "
+        "If an assignment brief is provided, grade how well the commit addresses it. "
         "Do not inflate scores; reserve 90+ for excellent work."
     )
+    assignment_block = ""
+    if assignment and (assignment.get("title") or assignment.get("brief")):
+        assignment_block = (
+            f"Assignment title: {assignment.get('title') or '(untitled)'}\n"
+            f"Assignment brief:\n{(assignment.get('brief') or '')[:2000]}\n\n"
+        )
     user = (
+        f"{assignment_block}"
         f"Static analysis summary:\n{analysis_json}\n\n"
         f"Git diff:\n{diff_trunc}\n\n"
         f"File snippets:\n{chr(10).join(file_summaries) or '(no files)'}"
@@ -178,6 +191,7 @@ def _placeholder_evaluate(
     *,
     commit_message: str | None = None,
     difficulty: dict[str, Any] | None = None,
+    assignment: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     def _to_100(val: Any, default: float = 55.0) -> float:
         if val is None:
@@ -228,6 +242,8 @@ def _placeholder_evaluate(
     score = round(min(100.0, max(0.0, score)), 1)
 
     feedback_parts = []
+    if assignment and assignment.get("title"):
+        feedback_parts.append(f"Reviewed against assignment “{assignment['title']}”.")
     level = (difficulty or {}).get("level") or "unknown"
     if score >= 85:
         feedback_parts.append(

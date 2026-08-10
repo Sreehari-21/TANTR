@@ -208,7 +208,9 @@ def score_consistency(
     return round(score, 2), explain
 
 
-def get_weights() -> dict[str, float]:
+def get_weights(override: dict[str, float] | None = None) -> dict[str, float]:
+    if override:
+        return normalize_weight_dict(override)
     w = {
         "code_quality": float(settings.GRADE_WEIGHT_QUALITY),
         "efficiency": float(settings.GRADE_WEIGHT_EFFICIENCY),
@@ -220,6 +222,31 @@ def get_weights() -> dict[str, float]:
     return {k: v / total for k, v in w.items()}
 
 
+def normalize_weight_dict(raw: dict[str, Any]) -> dict[str, float]:
+    """Accept percentages (sum≈100) or fractions (sum≈1); return normalized fractions."""
+    keys = (
+        "code_quality",
+        "efficiency",
+        "documentation",
+        "testing",
+        "commit_consistency",
+    )
+    missing = [k for k in keys if k not in raw]
+    if missing:
+        raise ValueError(f"rubric_weights missing keys: {', '.join(missing)}")
+    vals = {k: float(raw[k]) for k in keys}
+    if any(v < 0 for v in vals.values()):
+        raise ValueError("rubric_weights must be non-negative")
+    total = sum(vals.values())
+    if total <= 0:
+        raise ValueError("rubric_weights must sum to a positive value")
+    # If user entered percents like 30/25/20/15/10
+    if total > 1.5:
+        vals = {k: v / 100.0 for k, v in vals.items()}
+        total = sum(vals.values())
+    return {k: v / total for k, v in vals.items()}
+
+
 def compute_grade(
     *,
     analysis_results: dict[str, Any],
@@ -228,6 +255,8 @@ def compute_grade(
     testing_score: float,
     testing_explain: str,
     evaluation: dict[str, Any] | None = None,
+    weight_override: dict[str, float] | None = None,
+    assignment_title: str | None = None,
 ) -> dict[str, Any]:
     """
     Full rubric computation.
@@ -260,7 +289,7 @@ def compute_grade(
             consistency = 0.5 * consistency + 0.5 * float(ai_metrics["commit_consistency"])
             c_ex += " Blended with AI consistency judgment."
 
-    weights = get_weights()
+    weights = get_weights(weight_override)
     metrics_final = (
         weights["code_quality"] * quality
         + weights["efficiency"] * efficiency
@@ -294,6 +323,8 @@ def compute_grade(
             f"algo signals={difficulty['signals']['algo_keyword_hits']})."
         ),
     }
+    if assignment_title:
+        explanations["assignment"] = f"Graded against assignment: {assignment_title}"
 
     return {
         "code_quality": round(quality, 2),
@@ -308,4 +339,5 @@ def compute_grade(
         "metrics_final": round(metrics_final, 2),
         "ai_score": float(ai_score) if ai_score is not None else None,
         "ai_blend": blend if ai_score is not None else 0.0,
+        "assignment_title": assignment_title,
     }

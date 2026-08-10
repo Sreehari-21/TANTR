@@ -16,6 +16,7 @@ export type RubricMeta = {
     explanation?: string;
     signals?: { id?: string; detail?: string; path?: string }[];
   };
+  assignment?: { title?: string | null; brief?: string | null };
 };
 
 const METRICS: { key: keyof Grade; label: string; weightKey: string }[] = [
@@ -106,6 +107,11 @@ export default function GradeDisplay({
               {Math.round(vibeScore)}% vibe-coded
             </span>
           )}
+          {rubric?.assignment?.title && (
+            <span className="rounded-full border border-cyan-500/25 bg-cyan-500/10 px-2.5 py-0.5 font-mono text-xs text-cyan-300">
+              {rubric.assignment.title}
+            </span>
+          )}
         </div>
       </div>
 
@@ -144,6 +150,9 @@ export default function GradeDisplay({
 
       {(explanations.final || explanations.difficulty || vibe?.explanation) && (
         <div className="mt-6 space-y-2 border-t border-violet-500/10 pt-4">
+          {explanations.assignment && (
+            <p className="text-sm text-slate-400">{explanations.assignment}</p>
+          )}
           {explanations.difficulty && (
             <p className="text-sm text-slate-400">{explanations.difficulty}</p>
           )}

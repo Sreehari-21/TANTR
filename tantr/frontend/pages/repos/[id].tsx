@@ -13,8 +13,9 @@ import {
   getCommits,
   createCommit,
   getRepoTree,
+  updateRepo,
 } from '@/lib/api';
-import type { Repo, Commit } from '@/lib/api';
+import type { Repo, Commit, RubricWeights } from '@/lib/api';
 import { cn, formatRelative, shortSha } from '@/lib/utils';
 
 const DEFAULT_CODE = `def greet(name: str) -> str:
@@ -26,7 +27,38 @@ if __name__ == "__main__":
     print(greet("TANTR"))
 `;
 
-type Tab = 'code' | 'commits' | 'compose';
+const DEFAULT_WEIGHTS: RubricWeights = {
+  code_quality: 30,
+  efficiency: 25,
+  documentation: 20,
+  testing: 15,
+  commit_consistency: 10,
+};
+
+function weightsToPercents(w?: Repo['rubric_weights'] | null): RubricWeights {
+  if (!w) return { ...DEFAULT_WEIGHTS };
+  const vals = {
+    code_quality: Number(w.code_quality) || 0,
+    efficiency: Number(w.efficiency) || 0,
+    documentation: Number(w.documentation) || 0,
+    testing: Number(w.testing) || 0,
+    commit_consistency: Number(w.commit_consistency) || 0,
+  };
+  const total = Object.values(vals).reduce((a, b) => a + b, 0) || 1;
+  // Stored as fractions → show percents
+  if (total <= 1.5) {
+    return {
+      code_quality: Math.round(vals.code_quality * 100),
+      efficiency: Math.round(vals.efficiency * 100),
+      documentation: Math.round(vals.documentation * 100),
+      testing: Math.round(vals.testing * 100),
+      commit_consistency: Math.round(vals.commit_consistency * 100),
+    };
+  }
+  return vals as RubricWeights;
+}
+
+type Tab = 'code' | 'commits' | 'compose' | 'assignment';
 
 export default function RepoDetailPage() {
   const router = useRouter();
@@ -47,6 +79,12 @@ export default function RepoDetailPage() {
   const [message, setMessage] = useState('');
   const [committing, setCommitting] = useState(false);
 
+  // Assignment state
+  const [assignTitle, setAssignTitle] = useState('');
+  const [assignBrief, setAssignBrief] = useState('');
+  const [weights, setWeights] = useState<RubricWeights>(DEFAULT_WEIGHTS);
+  const [savingAssign, setSavingAssign] = useState(false);
+
   const load = useCallback(async () => {
     if (!repoId || Number.isNaN(repoId)) return;
     setError('');
@@ -60,6 +98,9 @@ export default function RepoDetailPage() {
       setCommits(c);
       setTreeFiles(tree.files || {});
       setHeadSha(tree.sha);
+      setAssignTitle(r.assignment_title || '');
+      setAssignBrief(r.assignment_brief || '');
+      setWeights(weightsToPercents(r.rubric_weights));
       const paths = Object.keys(tree.files || {}).sort();
       if (paths.length) {
         setSelectedPath((prev) => (prev && tree.files[prev] != null ? prev : paths[0]));
@@ -106,6 +147,26 @@ export default function RepoDetailPage() {
     }
   };
 
+  const handleSaveAssignment = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!repoId) return;
+    setSavingAssign(true);
+    setError('');
+    try {
+      const updated = await updateRepo(repoId, {
+        assignment_title: assignTitle.trim() || null,
+        assignment_brief: assignBrief.trim() || null,
+        rubric_weights: weights,
+      });
+      setRepo(updated);
+      setWeights(weightsToPercents(updated.rubric_weights));
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to save assignment');
+    } finally {
+      setSavingAssign(false);
+    }
+  };
+
   if (loading) {
     return (
       <Layout>
@@ -131,6 +192,7 @@ export default function RepoDetailPage() {
     { id: 'code', label: 'Code' },
     { id: 'commits', label: 'Commits' },
     { id: 'compose', label: 'New commit' },
+    { id: 'assignment', label: 'Assignment' },
   ];
 
   return (
@@ -144,6 +206,11 @@ export default function RepoDetailPage() {
             <p className="font-mono text-xs uppercase tracking-[0.25em] text-cyan-400/80">◈ Repository</p>
             <h1 className="page-title">{repo.name}</h1>
             {repo.description && <p className="page-subtitle">{repo.description}</p>}
+            {repo.assignment_title && (
+              <p className="mt-2 font-mono text-xs text-fuchsia-300/80">
+                Assignment: {repo.assignment_title}
+              </p>
+            )}
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {headSha ? (
@@ -274,6 +341,17 @@ export default function RepoDetailPage() {
 
       {tab === 'compose' && (
         <form onSubmit={handleCommit} className="space-y-4">
+          {repo.assignment_brief && (
+            <Card className="border-fuchsia-500/15" padding="md">
+              <p className="font-mono text-xs uppercase tracking-widest text-fuchsia-300/80">
+                ◈ Assignment brief
+              </p>
+              <p className="mt-2 whitespace-pre-wrap text-sm text-slate-300">
+                {repo.assignment_title ? `${repo.assignment_title}\n\n` : ''}
+                {repo.assignment_brief}
+              </p>
+            </Card>
+          )}
           <Card>
             <p className="mb-4 font-mono text-xs uppercase tracking-widest text-cyan-400/70">
               ◈ Compose commit
@@ -301,6 +379,73 @@ export default function RepoDetailPage() {
               </Button>
               <Button type="submit" loading={committing}>
                 Commit & analyze
+              </Button>
+            </div>
+          </Card>
+        </form>
+      )}
+
+      {tab === 'assignment' && (
+        <form onSubmit={handleSaveAssignment} className="space-y-4">
+          <Card>
+            <p className="mb-2 font-mono text-xs uppercase tracking-widest text-cyan-400/70">
+              ◈ Course assignment
+            </p>
+            <p className="mb-4 text-sm text-slate-500">
+              Set what students should build. Grading uses these rubric weights for this repo.
+            </p>
+            <div className="space-y-4">
+              <Input
+                label="Assignment title"
+                value={assignTitle}
+                onChange={(e) => setAssignTitle(e.target.value)}
+                placeholder="Lab 1 — Binary search"
+              />
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-slate-300">Brief</label>
+                <textarea
+                  value={assignBrief}
+                  onChange={(e) => setAssignBrief(e.target.value)}
+                  rows={6}
+                  placeholder="Implement binary search on a sorted list. Include tests and docstrings."
+                  className="w-full rounded-xl border border-violet-500/20 bg-[#0a0520]/80 px-4 py-3 text-sm text-slate-200 placeholder:text-slate-600 focus:border-cyan-500/40 focus:outline-none"
+                />
+              </div>
+            </div>
+          </Card>
+          <Card>
+            <p className="mb-4 font-mono text-xs uppercase tracking-widest text-cyan-400/70">
+              ◈ Rubric weights (%)
+            </p>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {(
+                [
+                  ['code_quality', 'Code quality'],
+                  ['efficiency', 'Efficiency'],
+                  ['documentation', 'Documentation'],
+                  ['testing', 'Testing'],
+                  ['commit_consistency', 'Consistency'],
+                ] as const
+              ).map(([key, label]) => (
+                <Input
+                  key={key}
+                  label={label}
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={String(weights[key])}
+                  onChange={(e) =>
+                    setWeights((prev) => ({ ...prev, [key]: Number(e.target.value) || 0 }))
+                  }
+                />
+              ))}
+            </div>
+            <p className="mt-3 font-mono text-xs text-slate-600">
+              Sum: {Object.values(weights).reduce((a, b) => a + Number(b), 0)}% (auto-normalized on save)
+            </p>
+            <div className="mt-4 flex justify-end">
+              <Button type="submit" loading={savingAssign}>
+                Save assignment
               </Button>
             </div>
           </Card>

@@ -2,7 +2,7 @@
 TANTR - Repository model.
 """
 
-from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text
+from sqlalchemy import Column, Integer, String, DateTime, ForeignKey, Text, JSON
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 
@@ -18,6 +18,10 @@ class Repository(Base):
     owner_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
     # Custom VCS HEAD commit sha (content-addressed, not Git)
     head_sha = Column(String(64), nullable=True, index=True)
+    # Optional course assignment + custom rubric weights (percentages or fractions)
+    assignment_title = Column(String(255), nullable=True)
+    assignment_brief = Column(Text, nullable=True)
+    rubric_weights = Column(JSON, nullable=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 

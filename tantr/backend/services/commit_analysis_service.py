@@ -56,6 +56,10 @@ def analyze_commit(commit_id: int, db: Session) -> dict:
     testing_score, testing_explain, testing_raw = score_testing_from_files(files)
     difficulty = estimate_difficulty(files, analysis_results)
     vibe = score_vibe_coded(files, commit_message=commit.message, diff=diff)
+    assignment = {
+        "title": repo.assignment_title,
+        "brief": repo.assignment_brief,
+    }
 
     try:
         evaluation = evaluate_commit(
@@ -64,6 +68,7 @@ def analyze_commit(commit_id: int, db: Session) -> dict:
             analysis_results=analysis_results,
             commit_message=commit.message,
             difficulty=difficulty,
+            assignment=assignment,
         )
     except Exception as e:
         return _fail_analysis(db, commit_id, str(e))
@@ -79,6 +84,9 @@ def analyze_commit(commit_id: int, db: Session) -> dict:
         testing_explain=testing_explain,
         testing_raw=testing_raw,
         vibe=vibe,
+        weight_override=repo.rubric_weights if isinstance(repo.rubric_weights, dict) else None,
+        assignment_title=repo.assignment_title,
+        assignment_brief=repo.assignment_brief,
     )
 
 
@@ -129,6 +137,9 @@ def _save_results(
     testing_explain: str,
     testing_raw: dict,
     vibe: dict,
+    weight_override: dict | None = None,
+    assignment_title: str | None = None,
+    assignment_brief: str | None = None,
 ) -> dict:
     rubric = compute_grade(
         analysis_results=analysis_results,
@@ -137,6 +148,8 @@ def _save_results(
         testing_score=testing_score,
         testing_explain=testing_explain,
         evaluation=evaluation,
+        weight_override=weight_override,
+        assignment_title=assignment_title,
     )
 
     analysis = db.query(CommitAnalysis).filter(CommitAnalysis.commit_id == commit_id).first()
@@ -155,6 +168,10 @@ def _save_results(
         "ai_source": evaluation.get("source"),
         "testing": testing_raw,
         "vibe": vibe,
+        "assignment": {
+            "title": assignment_title,
+            "brief": assignment_brief,
+        },
     }
     analysis.static_analysis_raw = raw
     analysis.complexity_score = analysis_results.get("complexity_score")
