@@ -18,6 +18,7 @@ class RepoResponse(BaseModel):
     name: str
     description: str | None
     owner_id: int
+    head_sha: str | None = None
     created_at: datetime
 
     class Config:

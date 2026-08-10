@@ -18,6 +18,8 @@ class CommitResponse(BaseModel):
     id: int
     repository_id: int
     sha: str
+    tree_sha: str | None = None
+    parent_sha: str | None = None
     message: str | None
     author_name: str | None
     author_email: str | None

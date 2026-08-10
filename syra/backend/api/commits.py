@@ -1,5 +1,6 @@
 """
-SYRA API - Commits (create, history, diff, get analysis).
+SYRA API - Commits (create, history, diff, files, analysis).
+Uses custom content-addressed VCS (not Git).
 """
 
 from __future__ import annotations
@@ -10,10 +11,16 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status, 
 from fastapi.responses import PlainTextResponse
 from sqlalchemy.orm import Session
 
-from models import get_db, User, Repository, Commit, CommitAnalysis, Grade
-from schemas.commit import CommitCreate, CommitResponse, CommitAnalysisResponse, GradeResponse, CommitWithAnalysisResponse
+from models import get_db, User, Repository, Commit
+from schemas.commit import (
+    CommitCreate,
+    CommitResponse,
+    CommitAnalysisResponse,
+    GradeResponse,
+    CommitWithAnalysisResponse,
+)
 from api.dependencies import get_current_user
-from git_service import get_commit_diff, GitServiceError
+from vcs import commit_files, get_commit_diff, get_commit_files, VcsError
 
 router = APIRouter()
 log = logging.getLogger("syra.commits")
@@ -27,7 +34,6 @@ def _repo_access(db: Session, user_id: int, repo_id: int) -> Repository | None:
 
 
 def _analyze_commit_background(commit_id: int) -> None:
-    """Run analysis in-process when Celery is unavailable (local dev)."""
     from tasks.commit_tasks import analyze_commit_task
 
     try:
@@ -44,27 +50,35 @@ def create_commit(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    from git_service import commit_files, GitServiceError
-
     repo = _repo_access(db, current_user.id, repo_id)
     if not repo:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Repository not found")
+
     author_name = current_user.full_name or current_user.username
     author_email = current_user.email
+    parent_sha = repo.head_sha
+
     try:
         sha = commit_files(
-            current_user.id,
-            repo.name,
+            db,
+            repo,
             data.message,
             data.files,
             author_name=author_name,
             author_email=author_email,
         )
-    except GitServiceError as e:
+    except VcsError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    # Resolve tree from VCS commit object
+    from vcs.store import read_commit_object
+
+    vcs_commit = read_commit_object(db, sha)
     commit = Commit(
         repository_id=repo_id,
         sha=sha,
+        tree_sha=vcs_commit.get("tree"),
+        parent_sha=parent_sha,
         message=data.message,
         author_name=author_name,
         author_email=author_email,
@@ -72,7 +86,7 @@ def create_commit(
     db.add(commit)
     db.commit()
     db.refresh(commit)
-    # Prefer Celery; fall back to in-process analysis so dev works without a worker
+
     enqueued = False
     try:
         from tasks.commit_tasks import analyze_commit_task
@@ -101,8 +115,14 @@ def commit_history(
     repo = _repo_access(db, current_user.id, repo_id)
     if not repo:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Repository not found")
-    commits = db.query(Commit).filter(Commit.repository_id == repo_id).order_by(Commit.created_at.desc()).offset(skip).limit(limit).all()
-    return commits
+    return (
+        db.query(Commit)
+        .filter(Commit.repository_id == repo_id)
+        .order_by(Commit.created_at.desc())
+        .offset(skip)
+        .limit(limit)
+        .all()
+    )
 
 
 @router.get("/repos/{repo_id}/commits/{commit_id}/diff", response_class=PlainTextResponse)
@@ -112,7 +132,6 @@ def get_commit_diff_endpoint(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Return the Git diff for the given commit (vs its parent)."""
     repo = _repo_access(db, current_user.id, repo_id)
     if not repo:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Repository not found")
@@ -123,10 +142,34 @@ def get_commit_diff_endpoint(
     if not commit:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Commit not found")
     try:
-        diff_text = get_commit_diff(current_user.id, repo.name, commit.sha)
-    except GitServiceError as e:
+        diff_text = get_commit_diff(db, commit.sha)
+    except VcsError as e:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
     return PlainTextResponse(diff_text)
+
+
+@router.get("/repos/{repo_id}/commits/{commit_id}/files")
+def get_commit_files_endpoint(
+    repo_id: int,
+    commit_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Return path → content at this commit (for file tree / editor)."""
+    repo = _repo_access(db, current_user.id, repo_id)
+    if not repo:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Repository not found")
+    commit = db.query(Commit).filter(
+        Commit.id == commit_id,
+        Commit.repository_id == repo_id,
+    ).first()
+    if not commit:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Commit not found")
+    try:
+        files = get_commit_files(db, commit.sha)
+    except VcsError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    return {"sha": commit.sha, "files": files}
 
 
 @router.post("/repos/{repo_id}/commits/{commit_id}/analyze")
@@ -136,7 +179,6 @@ def trigger_commit_analysis(
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
-    """Run the full analysis pipeline for this commit."""
     from services.commit_analysis_service import analyze_commit, CommitAnalysisError
 
     repo = _repo_access(db, current_user.id, repo_id)
@@ -149,8 +191,7 @@ def trigger_commit_analysis(
     if not commit:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Commit not found")
     try:
-        result = analyze_commit(commit_id, db)
-        return result
+        return analyze_commit(commit_id, db)
     except CommitAnalysisError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
@@ -171,14 +212,9 @@ def get_commit_analysis(
     ).first()
     if not commit:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Commit not found")
-    # Build response with optional analysis and grade
     out = CommitResponse.model_validate(commit)
-    analysis_data = None
-    if commit.analysis:
-        analysis_data = CommitAnalysisResponse.model_validate(commit.analysis)
-    grade_data = None
-    if commit.grade:
-        grade_data = GradeResponse.model_validate(commit.grade)
+    analysis_data = CommitAnalysisResponse.model_validate(commit.analysis) if commit.analysis else None
+    grade_data = GradeResponse.model_validate(commit.grade) if commit.grade else None
     return CommitWithAnalysisResponse(
         **out.model_dump(),
         analysis=analysis_data,

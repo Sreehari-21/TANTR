@@ -9,6 +9,7 @@ from models.commit import Commit
 from models.commit_analysis import CommitAnalysis
 from models.grade import Grade
 from models.enquiry import Enquiry
+from models.vcs_object import VcsObject
 
 __all__ = [
     "Base",
@@ -21,4 +22,5 @@ __all__ = [
     "CommitAnalysis",
     "Grade",
     "Enquiry",
+    "VcsObject",
 ]

@@ -1,52 +1,35 @@
-import type { Grade } from '@/lib/api';
+import Card from '@/components/ui/Card';
+import type { RubricMeta } from '@/components/GradeDisplay';
 
-const METRICS: { key: keyof Grade; label: string; color: string }[] = [
-  { key: 'code_quality', label: 'Code Quality', color: 'from-indigo-500 to-violet-500' },
-  { key: 'efficiency', label: 'Efficiency', color: 'from-cyan-500 to-blue-500' },
-  { key: 'documentation', label: 'Documentation', color: 'from-emerald-500 to-teal-500' },
-  { key: 'testing', label: 'Testing', color: 'from-amber-500 to-orange-500' },
-  { key: 'commit_consistency', label: 'Consistency', color: 'from-pink-500 to-rose-500' },
-];
+/** Detailed professor rubric breakdown (weights + narrative). */
+export default function GradeBreakdown({ rubric }: { rubric?: RubricMeta | null }) {
+  if (!rubric?.weights && !rubric?.explanations) return null;
 
-function scoreColor(score: number) {
-  if (score >= 80) return 'text-emerald-400';
-  if (score >= 60) return 'text-amber-400';
-  return 'text-red-400';
-}
+  const weights = rubric.weights || {};
+  const entries = Object.entries(weights);
 
-export default function GradeBreakdown({ grade }: { grade: Grade }) {
   return (
-    <div className="space-y-5">
-      <div className="flex items-end justify-between">
-        <div>
-          <p className="text-sm font-medium text-slate-400">Final Score</p>
-          <p className={`text-5xl font-bold tracking-tight ${scoreColor(grade.final_score)}`}>
-            {grade.final_score.toFixed(1)}
-          </p>
-        </div>
-        <div className="text-right text-sm text-slate-500">out of 100</div>
-      </div>
-
-      <div className="space-y-3">
-        {METRICS.map(({ key, label, color }) => {
-          const val = grade[key];
-          const score = typeof val === 'number' ? val : 0;
-          return (
-            <div key={key}>
-              <div className="mb-1 flex justify-between text-sm">
-                <span className="text-slate-400">{label}</span>
-                <span className="font-medium text-slate-200">{score.toFixed(0)}</span>
-              </div>
-              <div className="h-2 overflow-hidden rounded-full bg-slate-800">
-                <div
-                  className={`h-full rounded-full bg-gradient-to-r ${color} transition-all duration-700`}
-                  style={{ width: `${Math.min(100, score)}%` }}
-                />
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
+    <Card className="mb-6 border-violet-500/10" padding="md">
+      <h2 className="mb-3 text-lg font-semibold text-white">Rubric breakdown</h2>
+      <p className="mb-4 text-sm text-slate-500">
+        How the professor engine weighted this transmission.
+      </p>
+      {entries.length > 0 && (
+        <ul className="mb-4 grid gap-2 sm:grid-cols-2">
+          {entries.map(([key, value]) => (
+            <li
+              key={key}
+              className="flex items-center justify-between rounded-xl border border-violet-500/10 bg-violet-500/5 px-3 py-2 text-sm"
+            >
+              <span className="capitalize text-slate-300">{key.replace(/_/g, ' ')}</span>
+              <span className="font-mono text-cyan-400">{Math.round(value * 100)}%</span>
+            </li>
+          ))}
+        </ul>
+      )}
+      {rubric.explanations?.difficulty && (
+        <p className="text-sm text-slate-400">{rubric.explanations.difficulty}</p>
+      )}
+    </Card>
   );
 }

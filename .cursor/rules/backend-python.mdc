@@ -12,22 +12,23 @@ alwaysApply: false
 - `services/` — business logic
 - `models/` — SQLAlchemy models
 - `schemas/` — Pydantic request/response
-- `git_service/` — Git ops (GitPython or Dulwich fallback)
+- `vcs/` — custom content-addressed VCS (blob/tree/commit; no Git)
 - `tasks/` — Celery tasks
 - `ai_engine/` — OpenAI evaluation with placeholder fallback
 
 ## Patterns
 
 - Use `api.dependencies.get_current_user` for auth; `get_admin_user` for admin routes.
-- Raise `HTTPException` in routes; use `GitServiceError` / `CommitAnalysisError` in services.
+- Raise `HTTPException` in routes; use `VcsError` / `CommitAnalysisError` in services.
 - Config from `config.settings` (pydantic-settings, `backend/.env`).
 - DB session via `Depends(get_db)`.
 
-## Git service
+## Custom VCS
 
-- `ensure_repo_path` creates the directory; Dulwich `Repo.init` must **not** use `mkdir=True` on an existing path.
-- Prefer lazy imports in `services/__init__.py` — avoid eager imports that pull in `git_service` at package load.
+- Objects live in `vcs_objects` (sha256 content-addressed). Repo HEAD is `repositories.head_sha`.
+- Commit create path: `vcs.commit_files` → DB `Commit` row → analyze task.
+- Analysis reads files/diff via `vcs.get_commit_files` / `get_commit_diff` — never filesystem Git.
 
 ## Migrations
 
-- Alembic in `backend/alembic/`. Dev may use `DEV_AUTO_CREATE_SCHEMA=true`; production uses Alembic only.
+- Alembic in `backend/alembic/`. Dev may use `DEV_AUTO_CREATE_SCHEMA=true` (new tables only); column adds need Alembic or `RUN_MIGRATIONS_ON_STARTUP`. Production uses Alembic only.

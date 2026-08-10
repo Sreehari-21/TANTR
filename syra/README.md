@@ -17,7 +17,7 @@ syra/
 │   ├── tasks/        # Celery tasks
 │   ├── ai_engine/
 │   ├── analyzer/
-│   └── git_service/
+│   └── vcs/          # Custom content-addressed VCS (no Git)
 ├── frontend/         # Next.js + Tailwind + Monaco
 ├── database/
 └── docker/

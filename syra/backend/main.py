@@ -17,7 +17,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 from config import settings
 from models.database import Base, engine
 
-from models import User, Repository, Commit, CommitAnalysis, Grade, Enquiry  # noqa: F401
+from models import User, Repository, Commit, CommitAnalysis, Grade, Enquiry, VcsObject  # noqa: F401
 
 from api import auth, repos, commits, enquiries, admin
 

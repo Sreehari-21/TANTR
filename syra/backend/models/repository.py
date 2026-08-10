@@ -16,6 +16,8 @@ class Repository(Base):
     name = Column(String(255), nullable=False, index=True)
     description = Column(Text, nullable=True)
     owner_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    # Custom VCS HEAD commit sha (content-addressed, not Git)
+    head_sha = Column(String(64), nullable=True, index=True)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now())
 

@@ -22,10 +22,9 @@ node_modules/
 .next/
 out/
 
-# Student git repos (runtime data)
-backend/repos/
-**/repos/
+# Legacy filesystem repo storage (runtime data; custom VCS uses DB)
 syra/backend/repos/
+backend/repos/
 
 # OS / IDE local
 .DS_Store

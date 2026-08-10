@@ -20,7 +20,7 @@ class Grade(Base):
     documentation = Column(Float, nullable=True)
     testing = Column(Float, nullable=True)
     commit_consistency = Column(Float, nullable=True)
-    # Final: 0.30*quality + 0.25*efficiency + 0.20*doc + 0.15*testing + 0.10*consistency
+    # Final score from rubric engine (weighted metrics + optional AI blend)
     final_score = Column(Float, nullable=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 

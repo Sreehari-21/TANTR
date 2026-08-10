@@ -69,6 +69,20 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str = ""
     OPENAI_MODEL: str = "gpt-4o-mini"
 
+    # Grading rubric (must sum to 1.0)
+    GRADE_WEIGHT_QUALITY: float = 0.30
+    GRADE_WEIGHT_EFFICIENCY: float = 0.25
+    GRADE_WEIGHT_DOCUMENTATION: float = 0.20
+    GRADE_WEIGHT_TESTING: float = 0.15
+    GRADE_WEIGHT_CONSISTENCY: float = 0.10
+
+    # Blend AI overall score into final grade (0 = metrics only, 1 = AI only)
+    GRADE_AI_BLEND: float = 0.30
+
+    # Run pytest when test files are present (static fallback if unavailable)
+    RUN_PYTEST_ON_ANALYZE: bool = True
+    PYTEST_TIMEOUT_SECONDS: int = 20
+
     REPOS_BASE_PATH: str = "./repos"
 
     CORS_ORIGINS: List[str] = Field(

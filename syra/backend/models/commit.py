@@ -14,7 +14,9 @@ class Commit(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     repository_id = Column(Integer, ForeignKey("repositories.id", ondelete="CASCADE"), nullable=False)
-    sha = Column(String(40), nullable=False, index=True)  # Git commit SHA
+    sha = Column(String(64), nullable=False, index=True)  # Custom VCS commit SHA (sha256)
+    tree_sha = Column(String(64), nullable=True)
+    parent_sha = Column(String(64), nullable=True)
     message = Column(Text, nullable=True)
     author_name = Column(String(255), nullable=True)
     author_email = Column(String(255), nullable=True)

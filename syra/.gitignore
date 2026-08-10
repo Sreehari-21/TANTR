@@ -17,9 +17,8 @@ node_modules/
 .next/
 out/
 
-# Git repos (student code)
+# Custom VCS no longer uses filesystem git clones; keep ignoring legacy path
 backend/repos/
-repos/
 
 # OS / IDE
 .DS_Store

@@ -1,7 +1,8 @@
 """
 SYRA AI Professor Engine - commit evaluation.
 
-Uses OpenAI when OPENAI_API_KEY is set; otherwise placeholder scoring.
+Uses OpenAI when OPENAI_API_KEY is set; otherwise a structured placeholder rubric.
+Returns overall score, feedback, suggestions, and optional per-metric scores.
 """
 
 from __future__ import annotations
@@ -22,35 +23,63 @@ def evaluate_commit(
     diff: str,
     files: dict[str, str],
     analysis_results: dict[str, Any],
+    *,
+    commit_message: str | None = None,
+    difficulty: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """
     Evaluate a commit as a computer science professor would.
 
-    Args:
-        diff: Git diff string for the commit
-        files: Dict of file path -> content (changed/new files)
-        analysis_results: Output from static analyzer (complexity_score, style_score,
-                          documentation_score, warnings, optionally static_analysis_raw)
-
     Returns:
         {
-            "score": float,       # 0-100 overall
-            "feedback": str,     # Professor-style feedback
-            "suggestions": list[str]  # Improvement suggestions
+            "score": float,              # 0-100 overall
+            "feedback": str,
+            "suggestions": list[str],
+            "metrics": {                 # optional per-metric 0-100
+                "code_quality": float,
+                "efficiency": float,
+                "documentation": float,
+                "testing": float,
+                "commit_consistency": float,
+            },
+            "source": "openai" | "placeholder",
         }
     """
     if settings.OPENAI_API_KEY and settings.OPENAI_API_KEY.strip():
         try:
-            return _openai_evaluate(diff, files, analysis_results)
+            result = _openai_evaluate(
+                diff, files, analysis_results,
+                commit_message=commit_message,
+                difficulty=difficulty,
+            )
+            result["source"] = "openai"
+            return result
         except Exception as e:
             logger.warning("OpenAI evaluation failed, using placeholder: %s", e)
-    return _placeholder_evaluate(diff, files, analysis_results)
+    result = _placeholder_evaluate(
+        diff, files, analysis_results,
+        commit_message=commit_message,
+        difficulty=difficulty,
+    )
+    result["source"] = "placeholder"
+    return result
+
+
+def _clamp(val: Any, default: float = 70.0) -> float:
+    try:
+        v = float(val)
+    except (TypeError, ValueError):
+        return default
+    return max(0.0, min(100.0, v))
 
 
 def _openai_evaluate(
     diff: str,
     files: dict[str, str],
     analysis_results: dict[str, Any],
+    *,
+    commit_message: str | None = None,
+    difficulty: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     from openai import OpenAI
 
@@ -70,16 +99,23 @@ def _openai_evaluate(
             "documentation_score": analysis_results.get("documentation_score"),
             "warnings_count": len(analysis_results.get("warnings") or []),
             "warnings_sample": (analysis_results.get("warnings") or [])[:8],
+            "commit_message": commit_message,
+            "difficulty": (difficulty or {}).get("level"),
         },
         default=str,
     )
 
     system = (
-        "You are a computer science professor grading a student commit. "
-        "Respond with a single JSON object only, no markdown, with keys: "
-        "score (number 0-100), feedback (string, 2-4 sentences), "
-        "suggestions (array of 3-6 short actionable strings). "
-        "Consider: correctness, algorithm efficiency, readability, documentation, best practices."
+        "You are a strict but fair computer science professor grading a student Git commit. "
+        "Respond with a single JSON object only (no markdown) with keys:\n"
+        "- score (number 0-100 overall)\n"
+        "- metrics (object with code_quality, efficiency, documentation, testing, "
+        "commit_consistency — each number 0-100)\n"
+        "- feedback (string, 2-4 sentences, professor tone)\n"
+        "- suggestions (array of 3-6 short actionable strings)\n"
+        "Consider correctness, algorithm efficiency for the problem difficulty, "
+        "readability, documentation, tests, and commit message quality. "
+        "Do not inflate scores; reserve 90+ for excellent work."
     )
     user = (
         f"Static analysis summary:\n{analysis_json}\n\n"
@@ -110,18 +146,28 @@ def _openai_evaluate(
             parsed = json.loads(raw[start:end])
         else:
             raise ValueError("OpenAI response was not valid JSON") from None
-    score = float(parsed.get("score", 70))
-    score = max(0.0, min(100.0, score))
+
+    score = _clamp(parsed.get("score", 70))
     feedback = str(parsed.get("feedback", "")).strip() or "No feedback returned."
     suggestions = parsed.get("suggestions")
     if not isinstance(suggestions, list):
         suggestions = []
-    suggestions = [str(s).strip() for s in suggestions if str(s).strip()]
+    suggestions = [str(s).strip() for s in suggestions if str(s).strip()][:8]
+
+    metrics_in = parsed.get("metrics") if isinstance(parsed.get("metrics"), dict) else {}
+    metrics = {
+        "code_quality": _clamp(metrics_in.get("code_quality", score)),
+        "efficiency": _clamp(metrics_in.get("efficiency", score)),
+        "documentation": _clamp(metrics_in.get("documentation", score)),
+        "testing": _clamp(metrics_in.get("testing", score)),
+        "commit_consistency": _clamp(metrics_in.get("commit_consistency", score)),
+    }
 
     return {
         "score": round(score, 1),
         "feedback": feedback,
         "suggestions": suggestions,
+        "metrics": metrics,
     }
 
 
@@ -129,72 +175,105 @@ def _placeholder_evaluate(
     diff: str,
     files: dict[str, str],
     analysis_results: dict[str, Any],
+    *,
+    commit_message: str | None = None,
+    difficulty: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
-    """
-    Placeholder implementation using analysis_results.
-    Replace this with OpenAI API call when ready.
-    """
-    # Normalize scores to 0-100 (analyzer may return 0-10 or 0-100)
-    def _to_100(val: Any) -> float:
+    def _to_100(val: Any, default: float = 55.0) -> float:
         if val is None:
-            return 70.0  # default when missing
+            return default
         v = float(val)
         if v <= 10:
             return v * 10.0
         return min(100.0, v)
 
-    complexity = _to_100(analysis_results.get("complexity_score"))
-    style = _to_100(analysis_results.get("style_score"))
-    documentation = _to_100(analysis_results.get("documentation_score"))
+    complexity = _to_100(analysis_results.get("complexity_score"), 55.0)
+    style = _to_100(analysis_results.get("style_score"), 55.0)
+    documentation = _to_100(analysis_results.get("documentation_score"), 45.0)
     warnings = analysis_results.get("warnings") or []
 
-    # Weighted score: code quality components
+    code_quality = 0.55 * style + 0.45 * complexity
+    code_quality = max(0.0, code_quality - min(18.0, len(warnings) * 1.5))
+
+    efficiency = complexity
+    if difficulty and difficulty.get("multiplier"):
+        efficiency = min(100.0, efficiency * float(difficulty["multiplier"]))
+
+    testing = 42.0
+    for path in files:
+        if "test" in path.lower():
+            testing = 70.0
+            break
+
+    msg = (commit_message or "").strip()
+    consistency = 80.0
+    if not msg or len(msg) < 8:
+        consistency = 45.0
+    consistency = max(0.0, consistency - min(25.0, len(warnings) * 3.0))
+
+    metrics = {
+        "code_quality": round(code_quality, 1),
+        "efficiency": round(efficiency, 1),
+        "documentation": round(documentation, 1),
+        "testing": round(testing, 1),
+        "commit_consistency": round(consistency, 1),
+    }
     score = (
-        0.40 * style
-        + 0.35 * complexity
-        + 0.25 * documentation
+        0.30 * metrics["code_quality"]
+        + 0.25 * metrics["efficiency"]
+        + 0.20 * metrics["documentation"]
+        + 0.15 * metrics["testing"]
+        + 0.10 * metrics["commit_consistency"]
     )
+    score = round(min(100.0, max(0.0, score)), 1)
 
-    # Penalty for warnings (each warning reduces score slightly)
-    penalty = min(15.0, len(warnings) * 2.0)
-    score = max(0.0, score - penalty)
-    score = round(min(100.0, score), 1)
-
-    # Build feedback
     feedback_parts = []
-    if score >= 80:
-        feedback_parts.append("Solid work! Your code demonstrates good structure and readability.")
-    elif score >= 60:
-        feedback_parts.append("Good effort. There is room for improvement in code quality and style.")
+    level = (difficulty or {}).get("level") or "unknown"
+    if score >= 85:
+        feedback_parts.append(
+            f"Excellent commit for {level} work — structure and clarity stand out."
+        )
+    elif score >= 70:
+        feedback_parts.append(
+            f"Solid {level} commit. Strengthen weaker rubric areas to push into the A range."
+        )
+    elif score >= 55:
+        feedback_parts.append(
+            "Acceptable baseline, but several professor rubric criteria need attention."
+        )
     else:
-        feedback_parts.append("This commit needs more attention to code quality and best practices.")
+        feedback_parts.append(
+            "This submission falls short of course standards — prioritize fixes below."
+        )
 
     if style < 70:
-        feedback_parts.append("Style could be improved—consider following PEP 8 and reducing lint issues.")
-    if complexity < 70:
-        feedback_parts.append("Some functions may be too complex; consider breaking them down.")
-    if documentation < 50:
-        feedback_parts.append("Documentation is sparse; add docstrings for modules and key functions.")
+        feedback_parts.append("Style/lint issues are holding quality back (PEP 8 / flake8).")
+    if complexity < 65:
+        feedback_parts.append("Complexity is high; extract helpers and reduce branching.")
+    if documentation < 55:
+        feedback_parts.append("Documentation is thin — add module and function docstrings.")
+    if testing < 60:
+        feedback_parts.append("Add or expand automated tests (pytest) for core behavior.")
     if warnings:
-        feedback_parts.append(f"Address the {len(warnings)} issue(s) reported by the static analyzer.")
+        feedback_parts.append(f"Resolve the {len(warnings)} static-analysis finding(s).")
 
-    feedback = " ".join(feedback_parts)
-
-    # Build suggestions from warnings and low scores
-    suggestions = []
-    for w in warnings[:5]:  # top 5 warnings
-        suggestions.append(f"Fix: {w}")
-    if style < 70 and "style" not in str(suggestions).lower():
-        suggestions.append("Run flake8 and pylint to identify style issues.")
-    if complexity < 70 and "complexity" not in str(suggestions).lower():
+    suggestions = [f"Fix: {w}" for w in warnings[:5]]
+    if style < 70:
+        suggestions.append("Run flake8/pylint and clear remaining style violations.")
+    if complexity < 65:
         suggestions.append("Reduce cyclomatic complexity by extracting helper functions.")
-    if documentation < 50:
-        suggestions.append("Add module and function docstrings following Google or NumPy style.")
-    if not diff.strip() and files:
-        suggestions.append("Ensure meaningful commit messages describe your changes.")
+    if documentation < 55:
+        suggestions.append("Add Google-style docstrings for public functions and classes.")
+    if testing < 60:
+        suggestions.append("Add tests/ with pytest functions named test_*.")
+    if not msg or len(msg) < 10:
+        suggestions.append("Use a descriptive commit message (what changed and why).")
+    if not suggestions:
+        suggestions.append("Keep iterating — add edge-case tests and tighten naming.")
 
     return {
         "score": score,
-        "feedback": feedback,
-        "suggestions": suggestions,
+        "feedback": " ".join(feedback_parts),
+        "suggestions": suggestions[:8],
+        "metrics": metrics,
     }

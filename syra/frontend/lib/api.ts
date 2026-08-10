@@ -73,6 +73,7 @@ export type Repo = {
   name: string;
   description: string | null;
   owner_id: number;
+  head_sha?: string | null;
   created_at: string;
 };
 
@@ -80,6 +81,8 @@ export type Commit = {
   id: number;
   repository_id: number;
   sha: string;
+  tree_sha?: string | null;
+  parent_sha?: string | null;
   message: string | null;
   author_name: string | null;
   author_email: string | null;
@@ -89,6 +92,7 @@ export type Commit = {
 export type CommitAnalysis = {
   id: number;
   commit_id: number;
+  static_analysis_raw?: Record<string, unknown> | null;
   complexity_score: number | null;
   style_score: number | null;
   documentation_score: number | null;
@@ -191,6 +195,19 @@ export async function getCommitDiff(repoId: number, commitId: number): Promise<s
   const res = await request(`/api/repos/${repoId}/commits/${commitId}/diff`, {}, getToken());
   if (!res.ok) throw new ApiError('Failed to fetch diff');
   return res.text();
+}
+
+export async function getCommitFiles(
+  repoId: number,
+  commitId: number
+): Promise<{ sha: string; files: Record<string, string> }> {
+  return api(`/api/repos/${repoId}/commits/${commitId}/files`);
+}
+
+export async function getRepoTree(
+  repoId: number
+): Promise<{ sha: string | null; files: Record<string, string> }> {
+  return api(`/api/repos/${repoId}/tree`);
 }
 
 export async function triggerAnalyze(
