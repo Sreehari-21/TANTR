@@ -1,0 +1,38 @@
+---
+description: Next.js frontend conventions for SYRA
+globs: syra/frontend/**/*.{ts,tsx}
+alwaysApply: false
+---
+
+# Frontend (Next.js)
+
+## Stack
+
+- Pages router (`pages/`), not App Router
+- Tailwind CSS, dark slate/indigo theme
+- Monaco via `@/components/CodeEditor`
+- API via `@/lib/api` (`API_BASE`, `api()`, `ApiError`)
+
+## Auth
+
+- JWT in `localStorage` key `syra_token`
+- Guard pages: redirect to `/login` if no token
+- Use `getMe()` for user/admin checks
+
+## Layout
+
+- Wrap authenticated pages with `@/components/Layout`
+- `ApiStatus` shows banner when backend is offline
+
+## API calls
+
+```typescript
+import { getRepos, createCommit, getCommitAnalysis } from '@/lib/api';
+```
+
+Do not duplicate fetch logic; extend `lib/api.ts` for new endpoints.
+
+## Styling
+
+- Match existing patterns: `border-slate-800`, `bg-slate-900/50`, `text-indigo-400` for links/accents
+- Default dev port: **3001** (`NEXT_PUBLIC_API_URL` → `http://localhost:8000`)

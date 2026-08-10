@@ -1,0 +1,194 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --space-void: #030014;
+  --space-nebula: rgba(139, 92, 246, 0.18);
+  --space-cyan: rgba(34, 211, 238, 0.12);
+  --space-magenta: rgba(236, 72, 153, 0.1);
+  --cosmic-glow: rgba(167, 139, 250, 0.35);
+}
+
+@layer base {
+  body {
+    @apply text-slate-100 antialiased;
+    background-color: var(--space-void);
+  }
+
+  ::selection {
+    @apply bg-violet-500/40 text-white;
+  }
+}
+
+/* ── Nebula orbs ── */
+.nebula {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.7;
+  animation: nebula-drift 20s ease-in-out infinite;
+}
+
+.nebula-1 {
+  width: 55vw;
+  height: 55vw;
+  max-width: 600px;
+  max-height: 600px;
+  top: -15%;
+  left: -10%;
+  background: radial-gradient(circle, var(--space-nebula), transparent 70%);
+  animation-delay: 0s;
+}
+
+.nebula-2 {
+  width: 45vw;
+  height: 45vw;
+  max-width: 500px;
+  max-height: 500px;
+  top: 40%;
+  right: -15%;
+  background: radial-gradient(circle, var(--space-cyan), transparent 70%);
+  animation-delay: -7s;
+  animation-duration: 25s;
+}
+
+.nebula-3 {
+  width: 35vw;
+  height: 35vw;
+  max-width: 400px;
+  max-height: 400px;
+  bottom: -10%;
+  left: 30%;
+  background: radial-gradient(circle, var(--space-magenta), transparent 70%);
+  animation-delay: -14s;
+  animation-duration: 22s;
+}
+
+@keyframes nebula-drift {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(3%, 2%) scale(1.05); }
+  66% { transform: translate(-2%, 3%) scale(0.97); }
+}
+
+/* ── Starfield (box-shadow technique) ── */
+.stars-layer {
+  position: absolute;
+  inset: 0;
+  background: transparent;
+}
+
+.stars-sm::after {
+  content: '';
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  border-radius: 50%;
+  box-shadow:
+    12vw 8vh #fff, 45vw 12vh rgba(255,255,255,0.8), 78vw 5vh #fff,
+    23vw 34vh rgba(255,255,255,0.6), 67vw 28vh #fff, 89vw 41vh rgba(255,255,255,0.7),
+    5vw 55vh #fff, 34vw 62vh rgba(255,255,255,0.5), 56vw 71vh #fff,
+    91vw 58vh rgba(255,255,255,0.8), 18vw 82vh #fff, 72vw 88vh rgba(255,255,255,0.6),
+    41vw 91vh #fff, 95vw 76vh rgba(255,255,255,0.7), 8vw 22vh #fff,
+    52vw 48vh rgba(255,255,255,0.5), 83vw 19vh #fff, 29vw 47vh rgba(255,255,255,0.8);
+  animation: twinkle 4s ease-in-out infinite;
+}
+
+.stars-md::after {
+  content: '';
+  position: absolute;
+  width: 2px;
+  height: 2px;
+  border-radius: 50%;
+  box-shadow:
+    8vw 15vh rgba(167,139,250,0.9), 38vw 7vh rgba(34,211,238,0.8), 62vw 22vh #fff,
+    15vw 45vh rgba(255,255,255,0.9), 75vw 35vh rgba(167,139,250,0.7), 48vw 58vh #fff,
+    92vw 48vh rgba(34,211,238,0.8), 25vw 75vh #fff, 58vw 85vh rgba(255,255,255,0.8);
+  animation: twinkle 6s ease-in-out infinite 1s;
+}
+
+.stars-lg::after {
+  content: '';
+  position: absolute;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  box-shadow:
+    20vw 25vh rgba(34,211,238,0.9), 55vw 18vh #fff, 80vw 65vh rgba(236,72,153,0.8),
+    35vw 68vh #fff, 70vw 42vh rgba(167,139,250,0.9);
+  animation: twinkle 8s ease-in-out infinite 2s;
+}
+
+@keyframes twinkle {
+  0%, 100% { opacity: 0.6; }
+  50% { opacity: 1; }
+}
+
+@layer components {
+  .glass {
+    @apply border border-violet-500/10 bg-[#0a0520]/70 backdrop-blur-xl;
+    box-shadow:
+      0 0 0 1px rgba(139, 92, 246, 0.05) inset,
+      0 4px 24px rgba(0, 0, 0, 0.4);
+  }
+
+  .glass-hover {
+    @apply transition-all duration-300;
+  }
+
+  .glass-hover:hover {
+    border-color: rgba(139, 92, 246, 0.25);
+    background-color: rgba(10, 5, 32, 0.85);
+    box-shadow:
+      0 0 0 1px rgba(139, 92, 246, 0.1) inset,
+      0 0 30px rgba(139, 92, 246, 0.08),
+      0 8px 32px rgba(0, 0, 0, 0.5);
+  }
+
+  .input-field {
+    @apply w-full rounded-xl border border-violet-500/15 bg-[#0d0824]/80 px-4 py-2.5 text-slate-100 placeholder-slate-500 transition-all;
+  }
+
+  .input-field:focus {
+    @apply border-cyan-500/40 bg-[#0d0824] outline-none ring-2 ring-cyan-500/15;
+    box-shadow: 0 0 20px rgba(34, 211, 238, 0.08);
+  }
+
+  .btn-primary {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white transition-all disabled:cursor-not-allowed disabled:opacity-50;
+    background: linear-gradient(135deg, #7c3aed 0%, #4f46e5 50%, #0891b2 100%);
+    box-shadow:
+      0 0 20px rgba(124, 58, 237, 0.35),
+      0 4px 16px rgba(0, 0, 0, 0.4);
+  }
+
+  .btn-primary:hover:not(:disabled) {
+    background: linear-gradient(135deg, #8b5cf6 0%, #6366f1 50%, #06b6d4 100%);
+    box-shadow:
+      0 0 30px rgba(124, 58, 237, 0.5),
+      0 4px 20px rgba(0, 0, 0, 0.5);
+    transform: translateY(-1px);
+  }
+
+  .btn-secondary {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl border border-violet-500/20 bg-[#0d0824]/60 px-5 py-2.5 text-sm font-medium text-slate-300 transition-all hover:border-violet-400/30 hover:bg-[#0d0824]/90 hover:text-slate-100;
+  }
+
+  .page-title {
+    @apply text-3xl font-bold tracking-tight text-white;
+    text-shadow: 0 0 40px rgba(167, 139, 250, 0.2);
+  }
+
+  .page-subtitle {
+    @apply mt-1 text-slate-400;
+  }
+
+  .cosmic-text {
+    @apply bg-gradient-to-r from-violet-300 via-cyan-300 to-fuchsia-300 bg-clip-text text-transparent;
+  }
+
+  .orbit-ring {
+    @apply rounded-full border border-violet-500/20;
+    box-shadow: 0 0 40px rgba(139, 92, 246, 0.15);
+  }
+}

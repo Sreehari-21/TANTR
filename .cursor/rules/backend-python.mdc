@@ -1,0 +1,33 @@
+---
+description: FastAPI backend conventions for SYRA
+globs: syra/backend/**/*.py
+alwaysApply: false
+---
+
+# Backend (FastAPI)
+
+## Layout
+
+- `api/` — route handlers (thin)
+- `services/` — business logic
+- `models/` — SQLAlchemy models
+- `schemas/` — Pydantic request/response
+- `git_service/` — Git ops (GitPython or Dulwich fallback)
+- `tasks/` — Celery tasks
+- `ai_engine/` — OpenAI evaluation with placeholder fallback
+
+## Patterns
+
+- Use `api.dependencies.get_current_user` for auth; `get_admin_user` for admin routes.
+- Raise `HTTPException` in routes; use `GitServiceError` / `CommitAnalysisError` in services.
+- Config from `config.settings` (pydantic-settings, `backend/.env`).
+- DB session via `Depends(get_db)`.
+
+## Git service
+
+- `ensure_repo_path` creates the directory; Dulwich `Repo.init` must **not** use `mkdir=True` on an existing path.
+- Prefer lazy imports in `services/__init__.py` — avoid eager imports that pull in `git_service` at package load.
+
+## Migrations
+
+- Alembic in `backend/alembic/`. Dev may use `DEV_AUTO_CREATE_SCHEMA=true`; production uses Alembic only.

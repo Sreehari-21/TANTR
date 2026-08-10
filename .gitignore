@@ -1,0 +1,39 @@
+# Secrets
+.env
+.env.*
+!.env.example
+!**/.env.example
+docker/.env.production
+
+# Local databases
+*.db
+*.sqlite
+*.sqlite3
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+
+# Node
+node_modules/
+.next/
+out/
+
+# Student git repos (runtime data)
+backend/repos/
+**/repos/
+syra/backend/repos/
+
+# OS / IDE local
+.DS_Store
+.idea/
+.vscode/
+*.log
+
+# Build / cache
+dist/
+coverage/
+.turbo/

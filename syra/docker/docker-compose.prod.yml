@@ -1,0 +1,120 @@
+# SYRA — production-style stack (build images locally or in CI)
+# Usage:
+#   cp .env.production.example .env.production   # fill secrets
+#   docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
+#
+# Requirements in .env.production:
+#   SECRET_KEY (>=32 chars), DATABASE_URL (or compose defaults below), CORS_ORIGINS, etc.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-syra}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-syra}
+    volumes:
+      - syra_pg:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-syra}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --appendonly yes
+    volumes:
+      - syra_redis:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    restart: unless-stopped
+
+  api:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    environment:
+      ENVIRONMENT: production
+      DEBUG: "false"
+      DEV_AUTO_CREATE_SCHEMA: "false"
+      RUN_MIGRATIONS_ON_STARTUP: "false"
+      # Prefer setting DATABASE_URL in .env.production (required if password has special characters)
+      DATABASE_URL: ${DATABASE_URL:-postgresql://syra:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-syra}}
+      REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3001}
+      REPOS_BASE_PATH: /app/repos
+      TRUSTED_HOSTS: ${TRUSTED_HOSTS:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+    volumes:
+      - syra_repos:/app/repos
+    ports:
+      - "${API_PORT:-8000}:8000"
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          'python -c "import urllib.request; urllib.request.urlopen(\"http://127.0.0.1:8000/health\", timeout=5)"',
+        ]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 45s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+
+  worker:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    entrypoint: ["celery"]
+    command: ["-A", "celery_app", "worker", "--loglevel=info"]
+    environment:
+      ENVIRONMENT: production
+      DEBUG: "false"
+      DEV_AUTO_CREATE_SCHEMA: "false"
+      DATABASE_URL: ${DATABASE_URL:-postgresql://syra:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-syra}}
+      REDIS_URL: redis://redis:6379/0
+      SECRET_KEY: ${SECRET_KEY:?set SECRET_KEY}
+      REPOS_BASE_PATH: /app/repos
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-4o-mini}
+    volumes:
+      - syra_repos:/app/repos
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:8000}
+    environment:
+      NODE_ENV: production
+    ports:
+      - "${WEB_PORT:-3001}:3000"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  syra_pg:
+  syra_redis:
+  syra_repos:
